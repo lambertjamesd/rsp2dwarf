@@ -1,5 +1,10 @@
 package elf
 
+import (
+	"bytes"
+	"encoding/binary"
+)
+
 const (
 	EI_MAG0       = 0
 	EI_MAG1       = 1
@@ -169,14 +174,10 @@ func BuildElfSection(
 	addr uint32,
 	link uint32,
 	info uint32,
+	align uint32,
 	data []byte,
 ) ElfSection {
-	var align uint32 = 0
 	var entrySize uint32 = 0
-
-	if sType == SHT_PROGBITS {
-		align = 4
-	}
 
 	if sType == SHT_SYMTAB {
 		entrySize = 0x10
@@ -212,4 +213,114 @@ func GetString(section *ElfSection, offset uint32) string {
 
 		return string(section.Data[offset:endIndex])
 	}
+}
+
+func (elfFile *ElfFile) FindSectionIndex(name string) int {
+	for i, section := range elfFile.Sections {
+		if section.Name == sectionHeaderStringName {
+			return i
+		}
+	}
+
+	return -1
+}
+
+type ElfSymbol struct {
+	Name       string
+	nameOffset uint32
+	Value      uint32
+	Size       uint32
+	Info       uint8
+	Other      uint8
+	SHIndex    uint16
+}
+
+type SymbolBinding uint8
+
+const (
+	STB_LOCAL  SymbolBinding = 0
+	STB_GLOBAL SymbolBinding = 1
+	STB_WEAK   SymbolBinding = 2
+	STB_LOPROC SymbolBinding = 13
+	STB_HIPROC SymbolBinding = 15
+)
+
+type SymbolType uint8
+
+const (
+	STT_NOTYPE  SymbolType = 0
+	STT_OBJECT  SymbolType = 1
+	STT_FUNC    SymbolType = 2
+	STT_SECTION SymbolType = 3
+	STT_FILE    SymbolType = 4
+	STT_LOPROC  SymbolType = 13
+	STT_HIPROC  SymbolType = 15
+)
+
+func BuildSymbol(
+	name string,
+	value uint32,
+	size uint32,
+	binding SymbolBinding,
+	symbolType SymbolType,
+	other uint8,
+	shIndex uint16,
+) ElfSymbol {
+	return ElfSymbol{
+		name,
+		0,
+		value,
+		size,
+		(uint8(binding) << 4) + (uint8(symbolType) & 0xF),
+		other,
+		shIndex,
+	}
+}
+
+func (elfFile *ElfFile) AddSymbols(symbols []ElfSymbol, byteOrder binary.ByteOrder) {
+	var stringIndex = elfFile.FindSectionIndex(".strtab")
+
+	if stringIndex == -1 {
+		stringIndex = len(elfFile.Sections)
+
+		elfFile.Sections = append(elfFile.Sections, BuildElfSection(
+			".strtab",
+			SHT_STRTAB,
+			0,
+			0,
+			0,
+			0,
+			0,
+			make([]byte, 1),
+		))
+	}
+
+	var strTab = &elfFile.Sections[stringIndex]
+
+	var buffer bytes.Buffer
+
+	for _, symbol := range symbols {
+		data, nameOffset := AddStringToSection(strTab.Data, symbol.Name)
+
+		strTab.Data = data
+		symbol.nameOffset = uint32(nameOffset)
+
+		binary.Write(&buffer, byteOrder, &symbol.nameOffset)
+		binary.Write(&buffer, byteOrder, &symbol.Value)
+		binary.Write(&buffer, byteOrder, &symbol.Size)
+		binary.Write(&buffer, byteOrder, &symbol.Info)
+		binary.Write(&buffer, byteOrder, &symbol.Other)
+		binary.Write(&buffer, byteOrder, &symbol.SHIndex)
+	}
+
+	elfFile.Sections = append(elfFile.Sections, BuildElfSection(
+		".symtab",
+		SHT_SYMTAB,
+		0,
+		0,
+		3,
+		3,
+		0,
+		buffer.Bytes(),
+	))
 }

@@ -84,6 +84,7 @@ func BuildStringSection(name string, values []string) ElfSection {
 		0,
 		0,
 		0,
+		0,
 		data,
 	)
 }
@@ -133,14 +134,26 @@ func Serialize(writer SeekableWriter, elfFile *ElfFile) error {
 	writer.Seek(int64(elfFile.Header.eHeaderSize), os.SEEK_SET)
 
 	for index, _ := range elfFile.Sections {
-		if elfFile.Sections[index].Type == SHT_NULL {
-			elfFile.Sections[index].Size = 0
-			elfFile.Sections[index].Offset = 0
+		var section = &elfFile.Sections[index]
+
+		if section.Type == SHT_NULL {
+			section.Size = 0
+			section.Offset = 0
 		} else {
-			elfFile.Sections[index].Size = uint32(len(elfFile.Sections[index].Data))
+			section.Size = uint32(len(section.Data))
 			currentLocation, _ := writer.Seek(0, os.SEEK_CUR)
-			elfFile.Sections[index].Offset = uint32(currentLocation)
-			writer.Write(elfFile.Sections[index].Data)
+
+			if section.AddressAlign != 0 {
+				var misalign = currentLocation % int64(section.AddressAlign)
+				if misalign != 0 {
+					misalign = int64(section.AddressAlign) - misalign
+					writer.Write(make([]byte, misalign))
+					currentLocation += misalign
+				}
+			}
+
+			section.Offset = uint32(currentLocation)
+			writer.Write(section.Data)
 		}
 	}
 
