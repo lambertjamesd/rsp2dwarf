@@ -10,18 +10,20 @@ import (
 )
 
 type commandLineArgs struct {
-	output string
-	input  string
-	name   string
+	output       string
+	input        string
+	name         string
+	includeDebug bool
 }
 
 func parseCommandLineArgs() (*commandLineArgs, error) {
 	var result commandLineArgs
 
 	if len(os.Args) == 1 {
-		return nil, errors.New(`rsp2dwarf [-n name] [-o output] input
+		return nil, errors.New(`rsp2dwarf [-n name] [-o output] [-d] input
 	-n    the name to use in the linker
-	-o    the output file`)
+	-o    the output file
+	-d    include debug symbols`)
 	}
 
 	for i := 1; i < len(os.Args); i++ {
@@ -32,14 +34,18 @@ func parseCommandLineArgs() (*commandLineArgs, error) {
 				if i+1 >= len(os.Args) {
 					return nil, errors.New("-o flag requires a parameter")
 				} else {
-					result.output = arg
+					result.output = os.Args[i+1]
+					i++
 				}
 			} else if arg == "-n" {
 				if i+1 >= len(os.Args) {
 					return nil, errors.New("-n flag requires a parameter")
 				} else {
-					result.name = arg
+					result.name = os.Args[i+1]
+					i++
 				}
+			} else if arg == "-d" {
+				result.includeDebug = true
 			}
 
 		} else {
@@ -101,7 +107,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	elfFile, err := buildElf(args.input, args.name)
+	elfFile, err := buildElf(args.input, args.name, args.includeDebug)
 
 	if err != nil {
 		fmt.Println(err.Error())

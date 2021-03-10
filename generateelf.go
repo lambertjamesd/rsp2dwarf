@@ -5,10 +5,42 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/lambertjamesd/rsp2dwarf/dwarf"
 	"github.com/lambertjamesd/rsp2dwarf/elf"
 )
 
-func buildElf(textFilename string, linkName string) (*elf.ElfFile, error) {
+func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string) error {
+	symFile, err := os.Open(textFilename + ".sym")
+
+	if err != nil {
+		return err
+	}
+
+	defer symFile.Close()
+
+	symData, err := ioutil.ReadAll(symFile)
+
+	instructions, err := parseSymFile(string(symData))
+
+	if err != nil {
+		return err
+	}
+
+	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
+		".debug_line",
+		elf.SHT_MIPS_DWARF,
+		0,
+		0,
+		0,
+		0,
+		1,
+		dwarf.GenerateDebugLines(instructions, binary.BigEndian),
+	))
+
+	return nil
+}
+
+func buildElf(textFilename string, linkName string, includeDebug bool) (*elf.ElfFile, error) {
 	var result = &elf.ElfFile{
 		Header: elf.BuildElfHeader(
 			elf.ET_REL,
@@ -79,6 +111,14 @@ func buildElf(textFilename string, linkName string) (*elf.ElfFile, error) {
 		16,
 		dataData,
 	))
+
+	if includeDebug {
+		err = appendDebugSymbols(result, textFilename)
+
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	result.AddSymbols([]elf.ElfSymbol{
 		elf.BuildSymbol("", 0, 0, elf.STB_LOCAL, elf.STT_NOTYPE, 0, 0),

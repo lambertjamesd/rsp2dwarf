@@ -125,6 +125,7 @@ const (
 	SHT_DYNSYM     SectionType = 11
 	SHT_INIT_ARRAY SectionType = 12
 	SHT_FINI_ARRAY SectionType = 13
+	SHT_MIPS_DWARF SectionType = 0x7000001E
 )
 
 type SectionHeaderFlags uint32
@@ -299,7 +300,9 @@ func (elfFile *ElfFile) AddSymbols(symbols []ElfSymbol, byteOrder binary.ByteOrd
 
 	var buffer bytes.Buffer
 
-	for _, symbol := range symbols {
+	var info = 0
+
+	for index, symbol := range symbols {
 		data, nameOffset := AddStringToSection(strTab.Data, symbol.Name)
 
 		strTab.Data = data
@@ -311,16 +314,28 @@ func (elfFile *ElfFile) AddSymbols(symbols []ElfSymbol, byteOrder binary.ByteOrd
 		binary.Write(&buffer, byteOrder, &symbol.Info)
 		binary.Write(&buffer, byteOrder, &symbol.Other)
 		binary.Write(&buffer, byteOrder, &symbol.SHIndex)
+
+		if (symbol.Info >> 4) == uint8(STB_LOCAL) {
+			info = index + 1
+		}
 	}
 
-	elfFile.Sections = append(elfFile.Sections, BuildElfSection(
-		".symtab",
-		SHT_SYMTAB,
-		0,
-		0,
-		3,
-		3,
-		0,
-		buffer.Bytes(),
-	))
+	var symbolIndex = elfFile.FindSectionIndex(".strtab")
+
+	if symbolIndex == -1 {
+		elfFile.Sections = append(elfFile.Sections, BuildElfSection(
+			".symtab",
+			SHT_SYMTAB,
+			0,
+			0,
+			uint32(stringIndex),
+			uint32(info),
+			0,
+			buffer.Bytes(),
+		))
+	} else {
+		var symTab = &elfFile.Sections[symbolIndex]
+		symTab.Data = append(symTab.Data, buffer.Bytes()...)
+		symTab.Link = uint32(stringIndex)
+	}
 }
