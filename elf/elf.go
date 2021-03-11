@@ -166,6 +166,27 @@ type ElfSection struct {
 type ElfFile struct {
 	Header   ElfHeader
 	Sections []ElfSection
+
+	symbols    []ElfSymbol
+	stringData []byte
+}
+
+func (file *ElfFile) AddString(value string) int {
+	newData, result := AddStringToSection(file.stringData, value)
+
+	file.stringData = newData
+
+	return result
+}
+
+func (file *ElfFile) AddSymbol(value ElfSymbol) int {
+	var result = len(file.symbols)
+
+	file.symbols = append(file.symbols, value)
+
+	file.symbols[result].nameOffset = uint32(file.AddString(value.Name))
+
+	return result
 }
 
 func BuildElfSection(
@@ -279,6 +300,12 @@ func BuildSymbol(
 }
 
 func (elfFile *ElfFile) AddSymbols(symbols []ElfSymbol, byteOrder binary.ByteOrder) {
+	for _, symbol := range symbols {
+		elfFile.AddSymbol(symbol)
+	}
+}
+
+func rebuildElfSymbolsAndStrings(elfFile *ElfFile, byteOrder binary.ByteOrder) {
 	var stringIndex = elfFile.FindSectionIndex(".strtab")
 
 	if stringIndex == -1 {
@@ -292,22 +319,17 @@ func (elfFile *ElfFile) AddSymbols(symbols []ElfSymbol, byteOrder binary.ByteOrd
 			0,
 			0,
 			0,
-			make([]byte, 1),
+			elfFile.stringData,
 		))
+	} else {
+		elfFile.Sections[stringIndex].Data = elfFile.stringData
 	}
-
-	var strTab = &elfFile.Sections[stringIndex]
 
 	var buffer bytes.Buffer
 
 	var info = 0
 
-	for index, symbol := range symbols {
-		data, nameOffset := AddStringToSection(strTab.Data, symbol.Name)
-
-		strTab.Data = data
-		symbol.nameOffset = uint32(nameOffset)
-
+	for index, symbol := range elfFile.symbols {
 		binary.Write(&buffer, byteOrder, &symbol.nameOffset)
 		binary.Write(&buffer, byteOrder, &symbol.Value)
 		binary.Write(&buffer, byteOrder, &symbol.Size)

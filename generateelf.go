@@ -9,7 +9,7 @@ import (
 	"github.com/lambertjamesd/rsp2dwarf/elf"
 )
 
-func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string) error {
+func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, textSectionLength int) error {
 	symFile, err := os.Open(textFilename + ".sym")
 
 	if err != nil {
@@ -35,6 +35,17 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string) error {
 		0,
 		1,
 		dwarf.GenerateDebugLines(instructions, binary.BigEndian),
+	))
+
+	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
+		".debug_aranges",
+		elf.SHT_MIPS_DWARF,
+		0,
+		0,
+		0,
+		0,
+		1,
+		dwarf.GenerateAranges(textSectionLength, binary.BigEndian),
 	))
 
 	return nil
@@ -113,7 +124,7 @@ func buildElf(textFilename string, linkName string, includeDebug bool) (*elf.Elf
 	))
 
 	if includeDebug {
-		err = appendDebugSymbols(result, textFilename)
+		err = appendDebugSymbols(result, textFilename, len(textData))
 
 		if err != nil {
 			return nil, err

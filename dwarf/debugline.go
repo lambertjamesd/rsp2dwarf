@@ -109,6 +109,9 @@ func sortAndFilter(instructions []InstructionEntry) []InstructionEntry {
 }
 
 func getSpecialOpcode(lineDelta int, instructionDelta int) int {
+	if lineDelta >= lineRange {
+		return -1
+	}
 	return (lineDelta - lineBase) + (lineRange * instructionDelta / minInstructionLen) + opcodeBase
 }
 
@@ -163,13 +166,17 @@ func generateOpCodes(instructions []InstructionEntry, files []string, isStmt boo
 			line = inst.line
 			address = inst.address
 		} else {
-			result.WriteByte(DW_LNS_advance_pc)
-			writeLEB128(&result, int64(inst.address-address)/minInstructionLen)
-			address = inst.address
+			if inst.address != address {
+				result.WriteByte(DW_LNS_advance_pc)
+				writeLEB128(&result, int64(inst.address-address)/minInstructionLen)
+				address = inst.address
+			}
 
-			result.WriteByte(DW_LNS_advance_line)
-			writeLEB128(&result, int64(inst.line-line))
-			line = inst.line
+			if inst.line != line {
+				result.WriteByte(DW_LNS_advance_line)
+				writeLEB128(&result, int64(inst.line-line))
+				line = inst.line
+			}
 
 			result.WriteByte(DW_LNS_copy)
 		}

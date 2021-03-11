@@ -130,6 +130,7 @@ func Serialize(writer SeekableWriter, elfFile *ElfFile) error {
 	}
 
 	rebuildSectionHeaders(elfFile)
+	rebuildElfSymbolsAndStrings(elfFile, byteOrder)
 
 	writer.Seek(int64(elfFile.Header.eHeaderSize), os.SEEK_SET)
 
