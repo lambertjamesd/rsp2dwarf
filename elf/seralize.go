@@ -85,6 +85,7 @@ func BuildStringSection(name string, values []string) ElfSection {
 		0,
 		0,
 		0,
+		1,
 		data,
 	)
 }
@@ -129,8 +130,8 @@ func Serialize(writer SeekableWriter, elfFile *ElfFile) error {
 		return errors.New("Unrecognized data type")
 	}
 
-	rebuildSectionHeaders(elfFile)
 	rebuildElfSymbolsAndStrings(elfFile, byteOrder)
+	rebuildSectionHeaders(elfFile)
 
 	writer.Seek(int64(elfFile.Header.eHeaderSize), os.SEEK_SET)
 

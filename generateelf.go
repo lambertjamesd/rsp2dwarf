@@ -34,6 +34,7 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, textSectionLe
 		0,
 		0,
 		1,
+		0,
 		dwarf.GenerateDebugLines(instructions, binary.BigEndian),
 	))
 
@@ -45,7 +46,62 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, textSectionLe
 		0,
 		0,
 		1,
+		0,
 		dwarf.GenerateAranges(textSectionLength, binary.BigEndian),
+	))
+
+	var attributes = []*dwarf.AbbrevTreeNode{
+		{
+			Tag: dwarf.DW_TAG_compile_unit,
+			Attributes: []dwarf.AbbrevAttr{
+				dwarf.CreateConstantAttr(dwarf.DW_AT_stmt_list, 0, 4),
+				dwarf.CreateAddrAttr(dwarf.DW_AT_low_pc, 0),
+				dwarf.CreateAddrAttr(dwarf.DW_AT_high_pc, 0),
+				dwarf.CreateStringAttr(dwarf.DW_AT_name, "", false),
+				dwarf.CreateStringAttr(dwarf.DW_AT_comp_dir, "", false),
+				dwarf.CreateStringAttr(dwarf.DW_AT_producer, "rspasm", false),
+				dwarf.CreateConstantAttr(dwarf.DW_AT_stmt_list, dwarf.DW_LANG_Mips_Assembler, 2),
+			},
+			Children: nil,
+		},
+	}
+
+	var infoSections = dwarf.GenerateInfoAndAbbrev(attributes, binary.BigEndian)
+
+	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
+		".debug_info",
+		elf.SHT_MIPS_DWARF,
+		0,
+		0,
+		0,
+		0,
+		1,
+		0,
+		infoSections.Info,
+	))
+
+	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
+		".debug_abbrev",
+		elf.SHT_MIPS_DWARF,
+		0,
+		0,
+		0,
+		0,
+		1,
+		0,
+		infoSections.Abbrev,
+	))
+
+	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
+		".debug_str",
+		elf.SHT_MIPS_DWARF,
+		0,
+		0,
+		0,
+		0,
+		1,
+		1,
+		infoSections.DebugStr,
 	))
 
 	return nil
@@ -65,6 +121,7 @@ func buildElf(textFilename string, linkName string, includeDebug bool) (*elf.Elf
 	result.Sections = append(result.Sections, elf.BuildElfSection(
 		"",
 		elf.SHT_NULL,
+		0,
 		0,
 		0,
 		0,
@@ -95,6 +152,7 @@ func buildElf(textFilename string, linkName string, includeDebug bool) (*elf.Elf
 		0,
 		0,
 		16,
+		0,
 		textData,
 	))
 
@@ -120,6 +178,7 @@ func buildElf(textFilename string, linkName string, includeDebug bool) (*elf.Elf
 		0,
 		0,
 		16,
+		0,
 		dataData,
 	))
 

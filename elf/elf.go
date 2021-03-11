@@ -197,16 +197,9 @@ func BuildElfSection(
 	link uint32,
 	info uint32,
 	align uint32,
+	entrySize uint32,
 	data []byte,
 ) ElfSection {
-	var entrySize uint32 = 0
-
-	if sType == SHT_SYMTAB {
-		entrySize = 0x10
-	} else if sType == SHT_STRTAB {
-		entrySize = 1
-	}
-
 	return ElfSection{
 		0,
 		name,
@@ -319,6 +312,7 @@ func rebuildElfSymbolsAndStrings(elfFile *ElfFile, byteOrder binary.ByteOrder) {
 			0,
 			0,
 			0,
+			1,
 			elfFile.stringData,
 		))
 	} else {
@@ -353,6 +347,7 @@ func rebuildElfSymbolsAndStrings(elfFile *ElfFile, byteOrder binary.ByteOrder) {
 			uint32(stringIndex),
 			uint32(info),
 			0,
+			0x10,
 			buffer.Bytes(),
 		))
 	} else {

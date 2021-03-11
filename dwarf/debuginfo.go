@@ -1,6 +1,7 @@
 package dwarf
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 
@@ -233,6 +234,53 @@ type AbbrevAttr struct {
 	Value AttributeValue
 }
 
+func CreateAddrAttr(at DW_AT, data int64) AbbrevAttr {
+	return AbbrevAttr{
+		at,
+		DW_FORM_addr,
+		NumberValue{data, 4},
+	}
+}
+
+func CreateConstantAttr(at DW_AT, data int64, size uint32) AbbrevAttr {
+	var dwType DW_FORM
+
+	switch size {
+	case 0:
+		dwType = DW_FORM_udata
+	case 1:
+		dwType = DW_FORM_data1
+	case 2:
+		dwType = DW_FORM_data2
+	case 4:
+		dwType = DW_FORM_data4
+	case 8:
+		dwType = DW_FORM_data8
+	}
+
+	return AbbrevAttr{
+		at,
+		dwType,
+		NumberValue{data, size},
+	}
+}
+
+func CreateStringAttr(at DW_AT, data string, inline bool) AbbrevAttr {
+	var dwType DW_FORM
+
+	if inline {
+		dwType = DW_FORM_string
+	} else {
+		dwType = DW_FORM_strp
+	}
+
+	return AbbrevAttr{
+		at,
+		dwType,
+		StringValue{data, inline},
+	}
+}
+
 type AbbrevTreeNode struct {
 	Tag        DW_TAG
 	Attributes []AbbrevAttr
@@ -245,11 +293,82 @@ type InfoData struct {
 	DebugStr []byte
 }
 
-func GenerateInfoAndAbbrev(input []*AbbrevTreeNode) InfoData {
+func generateAbbrv(input []*AbbrevTreeNode, result *bytes.Buffer, currId int, idMapping map[*AbbrevTreeNode]int) int {
+	for _, node := range input {
+		idMapping[node] = currId
+		currId++
+
+		writeLEB128(result, int64(currId))
+
+		if len(node.Children) > 0 {
+			result.WriteByte(1)
+			currId = generateAbbrv(node.Children, result, currId, idMapping)
+		} else {
+			result.WriteByte(0)
+		}
+
+		for _, attr := range node.Attributes {
+			writeLEB128(result, int64(attr.Type))
+			writeLEB128(result, int64(attr.Form))
+		}
+
+		// double null terminate attributes
+		result.WriteByte(0)
+		result.WriteByte(0)
+	}
+
+	// null termiante node list
+	result.WriteByte(0)
+
+	return currId
+}
+
+func generateInfo(input []*AbbrevTreeNode, result *bytes.Buffer, strBytes []byte, byteOrder binary.ByteOrder, idMapping map[*AbbrevTreeNode]int) []byte {
+	for _, node := range input {
+		id, ok := idMapping[node]
+
+		if ok {
+			writeLEB128(result, int64(id))
+
+			for _, attr := range node.Attributes {
+				strBytes = attr.Value.WriteOut(result, byteOrder, strBytes)
+			}
+
+			strBytes = generateInfo(node.Children, result, strBytes, byteOrder, idMapping)
+		}
+	}
+
+	return strBytes
+}
+
+func GenerateInfoAndAbbrev(input []*AbbrevTreeNode, byteOrder binary.ByteOrder) InfoData {
 	var result InfoData
 
-	// var currId = 1
-	// var idMapping = make(map[*AbbrevTreeNode]int)
+	var idMapping = make(map[*AbbrevTreeNode]int)
+	var abbrevBytes bytes.Buffer
+
+	generateAbbrv(input, &abbrevBytes, 1, idMapping)
+
+	result.Abbrev = abbrevBytes.Bytes()
+
+	var infoBytes bytes.Buffer
+
+	result.DebugStr = generateInfo(input, &infoBytes, nil, byteOrder, idMapping)
+
+	var finalInfo bytes.Buffer
+	var totalLength = uint32(infoBytes.Len()) + 7
+	binary.Write(&finalInfo, byteOrder, &totalLength)
+
+	var version = uint16(2)
+	binary.Write(&finalInfo, byteOrder, &version)
+
+	var offset = uint32(0)
+	binary.Write(&finalInfo, byteOrder, &offset)
+	finalInfo.WriteByte(4)
+
+	finalInfo.Write(infoBytes.Bytes())
+
+	result.Info = finalInfo.Bytes()
 
 	return result
 }

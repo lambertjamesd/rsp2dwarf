@@ -2,6 +2,8 @@ package dwarf
 
 import "io"
 
+const DW_LANG_Mips_Assembler = 0x8001
+
 func writeLEB128(writer io.Writer, value int64) {
 	var hasMore = true
 	var tmp = make([]byte, 1)
