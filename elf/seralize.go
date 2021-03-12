@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sort"
+	"strings"
 )
 
 type SeekableWriter interface {
@@ -130,13 +131,24 @@ func Serialize(writer SeekableWriter, elfFile *ElfFile) error {
 		return errors.New("Unrecognized data type")
 	}
 
-	rebuildElfSymbolsAndStrings(elfFile, byteOrder)
+	var symbolIndex = rebuildElfSymbolsAndStrings(elfFile, byteOrder)
 	rebuildSectionHeaders(elfFile)
 
 	writer.Seek(int64(elfFile.Header.eHeaderSize), os.SEEK_SET)
 
 	for index, _ := range elfFile.Sections {
 		var section = &elfFile.Sections[index]
+
+		if strings.HasPrefix(section.Name, ".rel") {
+			section.Link = uint32(symbolIndex)
+			var sectionIndex = elfFile.FindSectionIndex(section.Name[4:])
+
+			if sectionIndex < 0 || sectionIndex >= len(elfFile.Sections) {
+				sectionIndex = 0
+			}
+
+			section.Info = uint32(sectionIndex)
+		}
 
 		if section.Type == SHT_NULL {
 			section.Size = 0

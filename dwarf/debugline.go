@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"sort"
+
+	"github.com/lambertjamesd/rsp2dwarf/elf"
 )
 
 const lineBase = 0
@@ -138,6 +140,14 @@ func generateOpCodes(instructions []InstructionEntry, files []string, isStmt boo
 	var col = 0
 	var basicBlock = false
 
+	result.WriteByte(0) // extended opcode
+	result.WriteByte(5) // size of extended operation
+	result.WriteByte(DW_LNE_set_address)
+	result.WriteByte(0) // address will be modified by the rel table
+	result.WriteByte(0)
+	result.WriteByte(0)
+	result.WriteByte(0)
+
 	for _, inst := range instructions {
 		var instFile = findFile(files, inst.filename)
 
@@ -193,8 +203,9 @@ func generateOpCodes(instructions []InstructionEntry, files []string, isStmt boo
 	return result.Bytes()
 }
 
-func GenerateDebugLines(instructions []InstructionEntry, byteOrder binary.ByteOrder) []byte {
+func GenerateDebugLines(instructions []InstructionEntry, byteOrder binary.ByteOrder) ([]byte, *elf.RelocationBuilder) {
 	var sorted = sortAndFilter(instructions)
+	var relBuilder = elf.NewRelocationBuilder()
 
 	var files []string = nil
 	var filesNameByteLength = 0
@@ -243,7 +254,9 @@ func GenerateDebugLines(instructions []InstructionEntry, byteOrder binary.ByteOr
 
 	result.WriteByte(0) // end of files
 
+	relBuilder.AddEntry(uint32(result.Len())+3, ".text", elf.R_MIPS_32)
+
 	result.Write(generated)
 
-	return result.Bytes()
+	return result.Bytes(), relBuilder
 }

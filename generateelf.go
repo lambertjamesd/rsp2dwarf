@@ -26,6 +26,14 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, compDir strin
 		return err
 	}
 
+	var symbolMapping = make(map[string]uint32)
+
+	// only symbols actually used
+	symbolMapping[".text"] = 1
+	symbolMapping[".data"] = 2
+
+	debugLineData, debugLineRef := dwarf.GenerateDebugLines(instructions, binary.BigEndian)
+
 	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
 		".debug_line",
 		elf.SHT_MIPS_DWARF,
@@ -35,8 +43,12 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, compDir strin
 		0,
 		1,
 		0,
-		dwarf.GenerateDebugLines(instructions, binary.BigEndian),
+		debugLineData,
 	))
+
+	elfFile.Sections = append(elfFile.Sections, debugLineRef.ToElfSection(".debug_line", symbolMapping, binary.BigEndian))
+
+	arangesData, arangesLineRef := dwarf.GenerateAranges(textSectionLength, binary.BigEndian)
 
 	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
 		".debug_aranges",
@@ -47,8 +59,10 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, compDir strin
 		0,
 		1,
 		0,
-		dwarf.GenerateAranges(textSectionLength, binary.BigEndian),
+		arangesData,
 	))
+
+	elfFile.Sections = append(elfFile.Sections, arangesLineRef.ToElfSection(".debug_aranges", symbolMapping, binary.BigEndian))
 
 	var attributes = []*dwarf.AbbrevTreeNode{
 		{
@@ -79,6 +93,8 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, compDir strin
 		0,
 		infoSections.Info,
 	))
+
+	elfFile.Sections = append(elfFile.Sections, infoSections.RelInfo.ToElfSection(".debug_info", symbolMapping, binary.BigEndian))
 
 	elfFile.Sections = append(elfFile.Sections, elf.BuildElfSection(
 		".debug_abbrev",
@@ -199,6 +215,28 @@ func buildElf(textFilename string, linkName string, compDir string, includeDebug
 		elf.BuildSymbol(linkName+"DataStart", 0, uint32(len(dataData)), elf.STB_GLOBAL, elf.STT_OBJECT, 0, 2),
 		elf.BuildSymbol(linkName+"DataEnd", uint32(len(dataData)), 0, elf.STB_GLOBAL, elf.STT_OBJECT, 0, 2),
 	}, binary.BigEndian)
+
+	if includeDebug {
+		dbgFile, err := os.Open(textFilename + ".dbg")
+
+		if err != nil {
+			return nil, err
+		}
+
+		defer dbgFile.Close()
+
+		dbgData, err := ioutil.ReadAll(dbgFile)
+
+		iSymbols, dSymbols := parseDbgFile(string(dbgData))
+
+		for _, iSymbol := range iSymbols {
+			result.AddSymbol(elf.BuildSymbol(iSymbol.Name, iSymbol.Value, 0, elf.STB_GLOBAL, elf.STT_FUNC, 0, 1))
+		}
+
+		for _, dSymbol := range dSymbols {
+			result.AddSymbol(elf.BuildSymbol(dSymbol.Name, dSymbol.Value, 0, elf.STB_GLOBAL, elf.STT_OBJECT, 0, 2))
+		}
+	}
 
 	return result, nil
 }

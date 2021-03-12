@@ -289,6 +289,7 @@ type AbbrevTreeNode struct {
 
 type InfoData struct {
 	Info     []byte
+	RelInfo  *elf.RelocationBuilder
 	Abbrev   []byte
 	DebugStr []byte
 }
@@ -325,7 +326,7 @@ func generateAbbrv(input []*AbbrevTreeNode, result *bytes.Buffer, currId int, id
 	return currId
 }
 
-func generateInfo(input []*AbbrevTreeNode, result *bytes.Buffer, strBytes []byte, byteOrder binary.ByteOrder, idMapping map[*AbbrevTreeNode]int) []byte {
+func generateInfo(input []*AbbrevTreeNode, result *bytes.Buffer, rel *elf.RelocationBuilder, strBytes []byte, byteOrder binary.ByteOrder, idMapping map[*AbbrevTreeNode]int) []byte {
 	for _, node := range input {
 		id, ok := idMapping[node]
 
@@ -333,10 +334,15 @@ func generateInfo(input []*AbbrevTreeNode, result *bytes.Buffer, strBytes []byte
 			writeLEB128(result, int64(id))
 
 			for _, attr := range node.Attributes {
+				if attr.Form == DW_FORM_addr {
+					// kinda hacky but works for now
+					rel.AddEntry(uint32(result.Len()), ".text", elf.R_MIPS_32)
+				}
+
 				strBytes = attr.Value.WriteOut(result, byteOrder, strBytes)
 			}
 
-			strBytes = generateInfo(node.Children, result, strBytes, byteOrder, idMapping)
+			strBytes = generateInfo(node.Children, result, rel, strBytes, byteOrder, idMapping)
 		}
 	}
 
@@ -345,6 +351,7 @@ func generateInfo(input []*AbbrevTreeNode, result *bytes.Buffer, strBytes []byte
 
 func GenerateInfoAndAbbrev(input []*AbbrevTreeNode, byteOrder binary.ByteOrder) InfoData {
 	var result InfoData
+	var relBuilder = elf.NewRelocationBuilder()
 
 	var idMapping = make(map[*AbbrevTreeNode]int)
 	var abbrevBytes bytes.Buffer
@@ -355,7 +362,7 @@ func GenerateInfoAndAbbrev(input []*AbbrevTreeNode, byteOrder binary.ByteOrder) 
 
 	var infoBytes bytes.Buffer
 
-	result.DebugStr = generateInfo(input, &infoBytes, make([]byte, 1), byteOrder, idMapping)
+	result.DebugStr = generateInfo(input, &infoBytes, relBuilder, make([]byte, 1), byteOrder, idMapping)
 
 	var finalInfo bytes.Buffer
 	var totalLength = uint32(infoBytes.Len()) + 7
@@ -368,9 +375,11 @@ func GenerateInfoAndAbbrev(input []*AbbrevTreeNode, byteOrder binary.ByteOrder) 
 	binary.Write(&finalInfo, byteOrder, &offset)
 	finalInfo.WriteByte(4)
 
+	relBuilder.AddOffset(uint32(finalInfo.Len()))
 	finalInfo.Write(infoBytes.Bytes())
 
 	result.Info = finalInfo.Bytes()
+	result.RelInfo = relBuilder
 
 	return result
 }

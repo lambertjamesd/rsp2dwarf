@@ -3,10 +3,13 @@ package dwarf
 import (
 	"bytes"
 	"encoding/binary"
+
+	"github.com/lambertjamesd/rsp2dwarf/elf"
 )
 
-func GenerateAranges(textSegmentLength int, byteOrder binary.ByteOrder) []byte {
+func GenerateAranges(textSegmentLength int, byteOrder binary.ByteOrder) ([]byte, *elf.RelocationBuilder) {
 	var result bytes.Buffer
+	var relBuilder = elf.NewRelocationBuilder()
 
 	var size uint32 = 0x1C
 	binary.Write(&result, byteOrder, &size)
@@ -24,13 +27,15 @@ func GenerateAranges(textSegmentLength int, byteOrder binary.ByteOrder) []byte {
 	result.WriteByte(0)
 
 	// single range entry
+	relBuilder.AddEntry(uint32(result.Len()), ".text", elf.R_MIPS_32)
 	binary.Write(&result, byteOrder, &offset)
 	size = uint32(textSegmentLength)
+	relBuilder.AddEntry(uint32(result.Len()), ".text", elf.R_MIPS_32)
 	binary.Write(&result, byteOrder, &size)
 
 	// null terminator
 	binary.Write(&result, byteOrder, &offset)
 	binary.Write(&result, byteOrder, &offset)
 
-	return result.Bytes()
+	return result.Bytes(), relBuilder
 }

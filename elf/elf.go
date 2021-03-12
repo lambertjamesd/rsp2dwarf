@@ -232,7 +232,7 @@ func GetString(section *ElfSection, offset uint32) string {
 
 func (elfFile *ElfFile) FindSectionIndex(name string) int {
 	for i, section := range elfFile.Sections {
-		if section.Name == sectionHeaderStringName {
+		if section.Name == name {
 			return i
 		}
 	}
@@ -298,7 +298,7 @@ func (elfFile *ElfFile) AddSymbols(symbols []ElfSymbol, byteOrder binary.ByteOrd
 	}
 }
 
-func rebuildElfSymbolsAndStrings(elfFile *ElfFile, byteOrder binary.ByteOrder) {
+func rebuildElfSymbolsAndStrings(elfFile *ElfFile, byteOrder binary.ByteOrder) int {
 	var stringIndex = elfFile.FindSectionIndex(".strtab")
 
 	if stringIndex == -1 {
@@ -336,9 +336,10 @@ func rebuildElfSymbolsAndStrings(elfFile *ElfFile, byteOrder binary.ByteOrder) {
 		}
 	}
 
-	var symbolIndex = elfFile.FindSectionIndex(".strtab")
+	var symbolIndex = elfFile.FindSectionIndex(".symtab")
 
 	if symbolIndex == -1 {
+		symbolIndex = len(elfFile.Sections)
 		elfFile.Sections = append(elfFile.Sections, BuildElfSection(
 			".symtab",
 			SHT_SYMTAB,
@@ -355,4 +356,6 @@ func rebuildElfSymbolsAndStrings(elfFile *ElfFile, byteOrder binary.ByteOrder) {
 		symTab.Data = append(symTab.Data, buffer.Bytes()...)
 		symTab.Link = uint32(stringIndex)
 	}
+
+	return symbolIndex
 }

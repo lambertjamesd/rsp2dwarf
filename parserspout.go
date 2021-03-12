@@ -54,3 +54,43 @@ func parseSymFile(input string) ([]dwarf.InstructionEntry, error) {
 
 	return result, nil
 }
+
+type SymbolDef struct {
+	Name  string
+	Value uint32
+}
+
+func parseDbgFile(input string) ([]SymbolDef, []SymbolDef) {
+	var instructionSymbols []SymbolDef = nil
+	var dataSymbols []SymbolDef = nil
+
+	var lines = strings.Split(input, "\n")
+
+	for _, line := range lines {
+		var parts = strings.Split(line, " ")
+
+		if len(parts) == 3 {
+			addr, _ := strconv.ParseInt(parts[1], 16, 32)
+
+			if parts[2] == "I" {
+				instructionSymbols = append(instructionSymbols, SymbolDef{parts[0], uint32(addr)})
+			} else if parts[2] == "D" {
+				dataSymbols = append(dataSymbols, SymbolDef{parts[0], uint32(addr)})
+			}
+		}
+	}
+
+	var finalInstruction []SymbolDef = nil
+
+	for _, check := range instructionSymbols {
+		for _, dataSymbol := range dataSymbols {
+			if dataSymbol.Name == check.Name {
+				continue
+			}
+		}
+
+		finalInstruction = append(finalInstruction, check)
+	}
+
+	return instructionSymbols, dataSymbols
+}
