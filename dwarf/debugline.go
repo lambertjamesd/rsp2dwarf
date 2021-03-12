@@ -60,6 +60,10 @@ func CreateInstructionEntry(
 	}
 }
 
+func (entry *InstructionEntry) Filename() string {
+	return entry.filename
+}
+
 type instructionEntryByAddress []InstructionEntry
 
 func (arr instructionEntryByAddress) Len() int {

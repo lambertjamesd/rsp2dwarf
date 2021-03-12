@@ -9,7 +9,7 @@ import (
 	"github.com/lambertjamesd/rsp2dwarf/elf"
 )
 
-func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, textSectionLength int) error {
+func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, compDir string, textSectionLength int) error {
 	symFile, err := os.Open(textFilename + ".sym")
 
 	if err != nil {
@@ -56,11 +56,11 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, textSectionLe
 			Attributes: []dwarf.AbbrevAttr{
 				dwarf.CreateConstantAttr(dwarf.DW_AT_stmt_list, 0, 4),
 				dwarf.CreateAddrAttr(dwarf.DW_AT_low_pc, 0),
-				dwarf.CreateAddrAttr(dwarf.DW_AT_high_pc, 0),
-				dwarf.CreateStringAttr(dwarf.DW_AT_name, "", false),
-				dwarf.CreateStringAttr(dwarf.DW_AT_comp_dir, "", false),
+				dwarf.CreateAddrAttr(dwarf.DW_AT_high_pc, int64(textSectionLength)),
+				dwarf.CreateStringAttr(dwarf.DW_AT_name, instructions[0].Filename(), false),
+				dwarf.CreateStringAttr(dwarf.DW_AT_comp_dir, compDir, false),
 				dwarf.CreateStringAttr(dwarf.DW_AT_producer, "rspasm", false),
-				dwarf.CreateConstantAttr(dwarf.DW_AT_stmt_list, dwarf.DW_LANG_Mips_Assembler, 2),
+				dwarf.CreateConstantAttr(dwarf.DW_AT_language, dwarf.DW_LANG_Mips_Assembler, 2),
 			},
 			Children: nil,
 		},
@@ -107,7 +107,7 @@ func appendDebugSymbols(elfFile *elf.ElfFile, textFilename string, textSectionLe
 	return nil
 }
 
-func buildElf(textFilename string, linkName string, includeDebug bool) (*elf.ElfFile, error) {
+func buildElf(textFilename string, linkName string, compDir string, includeDebug bool) (*elf.ElfFile, error) {
 	var result = &elf.ElfFile{
 		Header: elf.BuildElfHeader(
 			elf.ET_REL,
@@ -183,7 +183,7 @@ func buildElf(textFilename string, linkName string, includeDebug bool) (*elf.Elf
 	))
 
 	if includeDebug {
-		err = appendDebugSymbols(result, textFilename, len(textData))
+		err = appendDebugSymbols(result, textFilename, compDir, len(textData))
 
 		if err != nil {
 			return nil, err

@@ -12,6 +12,7 @@ import (
 type commandLineArgs struct {
 	output       string
 	input        string
+	compDir      string
 	name         string
 	includeDebug bool
 }
@@ -20,10 +21,11 @@ func parseCommandLineArgs() (*commandLineArgs, error) {
 	var result commandLineArgs
 
 	if len(os.Args) == 1 {
-		return nil, errors.New(`rsp2dwarf [-n name] [-o output] [-d] input
+		return nil, errors.New(`rsp2dwarf [-n name] [-o output] [-d comp_dir] [-g] input
 	-n    the name to use in the linker
 	-o    the output file
-	-d    include debug symbols`)
+	-d    directory compilation was done in
+	-g    generate debug symbols`)
 	}
 
 	for i := 1; i < len(os.Args); i++ {
@@ -45,6 +47,13 @@ func parseCommandLineArgs() (*commandLineArgs, error) {
 					i++
 				}
 			} else if arg == "-d" {
+				if i+1 >= len(os.Args) {
+					return nil, errors.New("-d flag requires a parameter")
+				} else {
+					result.compDir = os.Args[i+1]
+					i++
+				}
+			} else if arg == "-g" {
 				result.includeDebug = true
 			}
 
@@ -67,6 +76,16 @@ func parseCommandLineArgs() (*commandLineArgs, error) {
 
 	if result.output == "" {
 		result.output = result.input + ".o"
+	}
+
+	if result.compDir == "" {
+		compDir, err := os.Getwd()
+
+		if err != nil {
+			return nil, err
+		}
+
+		result.compDir = compDir
 	}
 
 	return &result, nil
@@ -107,7 +126,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	elfFile, err := buildElf(args.input, args.name, args.includeDebug)
+	elfFile, err := buildElf(args.input, args.name, args.compDir, args.includeDebug)
 
 	if err != nil {
 		fmt.Println(err.Error())

@@ -296,9 +296,9 @@ type InfoData struct {
 func generateAbbrv(input []*AbbrevTreeNode, result *bytes.Buffer, currId int, idMapping map[*AbbrevTreeNode]int) int {
 	for _, node := range input {
 		idMapping[node] = currId
-		currId++
 
 		writeLEB128(result, int64(currId))
+		writeLEB128(result, int64(node.Tag))
 
 		if len(node.Children) > 0 {
 			result.WriteByte(1)
@@ -315,6 +315,8 @@ func generateAbbrv(input []*AbbrevTreeNode, result *bytes.Buffer, currId int, id
 		// double null terminate attributes
 		result.WriteByte(0)
 		result.WriteByte(0)
+
+		currId++
 	}
 
 	// null termiante node list
@@ -353,7 +355,7 @@ func GenerateInfoAndAbbrev(input []*AbbrevTreeNode, byteOrder binary.ByteOrder) 
 
 	var infoBytes bytes.Buffer
 
-	result.DebugStr = generateInfo(input, &infoBytes, nil, byteOrder, idMapping)
+	result.DebugStr = generateInfo(input, &infoBytes, make([]byte, 1), byteOrder, idMapping)
 
 	var finalInfo bytes.Buffer
 	var totalLength = uint32(infoBytes.Len()) + 7
