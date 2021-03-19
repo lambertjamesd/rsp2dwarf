@@ -166,7 +166,7 @@ type NumberValue struct {
 func writeOutNumber(writer io.Writer, byteOrder binary.ByteOrder, value int64, size uint32) {
 	switch size {
 	case 0:
-		writeLEB128(writer, value)
+		writeULEB128(writer, uint64(value))
 	case 1:
 		var asByte = uint8(value)
 		binary.Write(writer, byteOrder, &asByte)
@@ -224,7 +224,7 @@ type Indirect struct {
 }
 
 func (value Indirect) WriteOut(writer io.Writer, byteOrder binary.ByteOrder, debugStr []byte) []byte {
-	writeLEB128(writer, int64(value.Form))
+	writeULEB128(writer, uint64(value.Form))
 	return value.Value.WriteOut(writer, byteOrder, debugStr)
 }
 
@@ -298,8 +298,8 @@ func generateAbbrv(input []*AbbrevTreeNode, result *bytes.Buffer, currId int, id
 	for _, node := range input {
 		idMapping[node] = currId
 
-		writeLEB128(result, int64(currId))
-		writeLEB128(result, int64(node.Tag))
+		writeULEB128(result, uint64(currId))
+		writeULEB128(result, uint64(node.Tag))
 
 		if len(node.Children) > 0 {
 			result.WriteByte(1)
@@ -309,8 +309,8 @@ func generateAbbrv(input []*AbbrevTreeNode, result *bytes.Buffer, currId int, id
 		}
 
 		for _, attr := range node.Attributes {
-			writeLEB128(result, int64(attr.Type))
-			writeLEB128(result, int64(attr.Form))
+			writeULEB128(result, uint64(attr.Type))
+			writeULEB128(result, uint64(attr.Form))
 		}
 
 		// double null terminate attributes
@@ -331,7 +331,7 @@ func generateInfo(input []*AbbrevTreeNode, result *bytes.Buffer, rel *elf.Reloca
 		id, ok := idMapping[node]
 
 		if ok {
-			writeLEB128(result, int64(id))
+			writeULEB128(result, uint64(id))
 
 			for _, attr := range node.Attributes {
 				if attr.Form == DW_FORM_addr {

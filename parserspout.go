@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -58,11 +59,43 @@ func parseSymFile(input string) ([]dwarf.InstructionEntry, error) {
 type SymbolDef struct {
 	Name  string
 	Value uint32
+	Size  uint32
 }
 
-func parseDbgFile(input string) ([]SymbolDef, []SymbolDef) {
-	var instructionSymbols []SymbolDef = nil
-	var dataSymbols []SymbolDef = nil
+type SortSymbolsByValue []SymbolDef
+
+func (arr SortSymbolsByValue) Len() int {
+	return len(arr)
+}
+
+func (arr SortSymbolsByValue) Less(i, j int) bool {
+	return arr[i].Value < arr[j].Value
+}
+
+func (arr SortSymbolsByValue) Swap(i, j int) {
+	arr[i], arr[j] = arr[j], arr[i]
+}
+
+func assignRanges(instructionSymbols SortSymbolsByValue, size int) []SymbolDef {
+	sort.Sort(instructionSymbols)
+
+	for index, _ := range instructionSymbols {
+		if index != 0 {
+			instructionSymbols[index-1].Size = instructionSymbols[index].Value - instructionSymbols[index-1].Value
+		}
+	}
+
+	if len(instructionSymbols) > 0 {
+		var lastEntry = &instructionSymbols[len(instructionSymbols)-1]
+		lastEntry.Size = uint32(size) - lastEntry.Value
+	}
+
+	return instructionSymbols
+}
+
+func parseDbgFile(input string, textSize int, dataSize int) ([]SymbolDef, []SymbolDef) {
+	var instructionSymbols SortSymbolsByValue = nil
+	var dataSymbols SortSymbolsByValue = nil
 
 	var lines = strings.Split(input, "\n")
 
@@ -73,24 +106,31 @@ func parseDbgFile(input string) ([]SymbolDef, []SymbolDef) {
 			addr, _ := strconv.ParseInt(parts[1], 16, 32)
 
 			if parts[2] == "I" {
-				instructionSymbols = append(instructionSymbols, SymbolDef{parts[0], uint32(addr)})
+				instructionSymbols = append(instructionSymbols, SymbolDef{parts[0], uint32(addr), 0})
 			} else if parts[2] == "D" {
-				dataSymbols = append(dataSymbols, SymbolDef{parts[0], uint32(addr)})
+				dataSymbols = append(dataSymbols, SymbolDef{parts[0], uint32(addr), 0})
 			}
 		}
 	}
 
-	var finalInstruction []SymbolDef = nil
+	var finalInstruction SortSymbolsByValue = nil
 
 	for _, check := range instructionSymbols {
+		var isDuplicate = false
+
 		for _, dataSymbol := range dataSymbols {
 			if dataSymbol.Name == check.Name {
-				continue
+				isDuplicate = true
+				break
 			}
+		}
+
+		if isDuplicate {
+			continue
 		}
 
 		finalInstruction = append(finalInstruction, check)
 	}
 
-	return instructionSymbols, dataSymbols
+	return assignRanges(finalInstruction, textSize), assignRanges(dataSymbols, dataSize)
 }

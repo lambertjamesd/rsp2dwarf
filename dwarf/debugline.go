@@ -115,7 +115,7 @@ func sortAndFilter(instructions []InstructionEntry) []InstructionEntry {
 }
 
 func getSpecialOpcode(lineDelta int, instructionDelta int) int {
-	if lineDelta >= lineRange {
+	if lineDelta >= lineRange || lineDelta < lineBase {
 		return -1
 	}
 	return (lineDelta - lineBase) + (lineRange * instructionDelta / minInstructionLen) + opcodeBase
@@ -153,13 +153,13 @@ func generateOpCodes(instructions []InstructionEntry, files []string, isStmt boo
 
 		if instFile != file {
 			result.WriteByte(DW_LNS_set_file)
-			writeLEB128(&result, int64(instFile))
+			writeULEB128(&result, uint64(instFile))
 			file = instFile
 		}
 
 		if col != inst.col {
 			result.WriteByte(DW_LNS_set_column)
-			writeLEB128(&result, int64(inst.col))
+			writeULEB128(&result, uint64(inst.col))
 			col = inst.col
 		}
 
@@ -182,13 +182,13 @@ func generateOpCodes(instructions []InstructionEntry, files []string, isStmt boo
 		} else {
 			if inst.address != address {
 				result.WriteByte(DW_LNS_advance_pc)
-				writeLEB128(&result, int64(inst.address-address)/minInstructionLen)
+				writeULEB128(&result, uint64(inst.address-address)/minInstructionLen)
 				address = inst.address
 			}
 
 			if inst.line != line {
 				result.WriteByte(DW_LNS_advance_line)
-				writeLEB128(&result, int64(inst.line-line))
+				writeSLEB128(&result, int64(inst.line-line))
 				line = inst.line
 			}
 
@@ -213,7 +213,7 @@ func GenerateDebugLines(instructions []InstructionEntry, byteOrder binary.ByteOr
 	for _, inst := range sorted {
 		if findFile(files, inst.filename) == 0 {
 			files = append(files, inst.filename)
-			filesNameByteLength = len([]byte(inst.filename))
+			filesNameByteLength += len([]byte(inst.filename))
 		}
 	}
 

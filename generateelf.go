@@ -227,14 +227,14 @@ func buildElf(textFilename string, linkName string, compDir string, includeDebug
 
 		dbgData, err := ioutil.ReadAll(dbgFile)
 
-		iSymbols, dSymbols := parseDbgFile(string(dbgData))
+		iSymbols, dSymbols := parseDbgFile(string(dbgData), len(textData), len(dataData))
 
 		for _, iSymbol := range iSymbols {
-			result.AddSymbol(elf.BuildSymbol(iSymbol.Name, iSymbol.Value, 0, elf.STB_GLOBAL, elf.STT_FUNC, 0, 1))
+			result.AddSymbol(elf.BuildSymbol(iSymbol.Name, iSymbol.Value, iSymbol.Size, elf.STB_GLOBAL, elf.STT_FUNC, 0, 1))
 		}
 
 		for _, dSymbol := range dSymbols {
-			result.AddSymbol(elf.BuildSymbol(dSymbol.Name, dSymbol.Value, 0, elf.STB_GLOBAL, elf.STT_OBJECT, 0, 2))
+			result.AddSymbol(elf.BuildSymbol(dSymbol.Name, dSymbol.Value, dSymbol.Size, elf.STB_GLOBAL, elf.STT_OBJECT, 0, 2))
 		}
 	}
 
